@@ -1,0 +1,104 @@
+CREATE DATABASE Elecciones;
+USE Elecciones;
+CREATE TABLE Candidatos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    nombre_completo VARCHAR(100) NOT NULL,
+    edad INT NOT NULL,
+    partido_politico VARCHAR(50) NOT NULL,
+    costo_campana DECIMAL(10, 2) NOT NULL DEFAULT 0.0,
+    votos_obtenidos INT DEFAULT 0
+);
+CREATE TABLE Medio_Comunicacion (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion VARCHAR(50) NOT NULL
+);
+CREATE TABLE Votos (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    id_candidato INT,
+    id_medio INT,
+    FOREIGN KEY (id_candidato) REFERENCES Candidatos(id),
+    FOREIGN KEY (id_medio) REFERENCES Medio_Comunicacion(id)
+);
+CREATE TABLE Medio_Comunicacion (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    descripcion VARCHAR(50) NOT NULL DEFAULT 'Sin descripción'
+);
+INSERT INTO Candidatos (nombre_completo, edad, partido_politico, costo_campana)
+VALUES
+('Juan Pérez', 30, 'Partido A', 15000.00),
+('Ana Gómez', 28, 'Partido B', 20000.00),
+('Luis Martínez', 35, 'Partido A', DEFAULT);
+
+-- Poblar la tabla Medio_Comunicacion
+INSERT INTO Medio_Comunicacion (descripcion)
+VALUES
+('Televisión'),
+('Radio'),
+(DEFAULT); 
+INSERT INTO Votos (id_candidato, id_medio)
+VALUES
+(1, 1), 
+(2, 2), 
+(3, DEFAULT); 
+GRANT SELECT ON Elecciones.Candidatos TO 'usuario1'@'localhost';
+USE Elecciones;
+CREATE VIEW Vista_Candidatos_Votos AS
+SELECT 
+    C.nombre_completo, 
+    C.partido_politico, 
+    C.votos_obtenidos, 
+    M.descripcion AS medio
+FROM 
+    Candidatos C
+JOIN 
+    Votos V ON C.id = V.id_candidato
+JOIN 
+    Medio_Comunicacion M ON V.id_medio = M.id;
+    DELIMITER //
+
+CREATE PROCEDURE RegistrarVoto(
+    IN p_id_candidato INT,
+    IN p_id_medio INT
+)
+BEGIN
+    -- Insertar el voto en la tabla Votos
+    INSERT INTO Votos (id_candidato, id_medio)
+    VALUES (p_id_candidato, p_id_medio);
+    
+    -- Actualizar el conteo de votos en la tabla Candidatos
+    UPDATE Candidatos
+    SET votos_obtenidos = votos_obtenidos + 1
+    WHERE id = p_id_candidato;
+END //
+
+DELIMITER ;
+CALL RegistrarVoto(1, 2);
+
+-- Verificar la actualización en la tabla Votos
+SELECT * FROM Votos;
+
+-- Verificar el conteo actualizado en la tabla Candidatos
+SELECT nombre_completo, votos_obtenidos FROM Candidatos WHERE id = 1;
+DELIMITER //
+
+CREATE TRIGGER ValidarEdadCandidato
+BEFORE INSERT ON Candidatos
+FOR EACH ROW
+BEGIN
+    -- Validar que la edad sea al menos 25 años
+    IF NEW.edad < 25 THEN
+        SIGNAL SQLSTATE '45000'
+        SET MESSAGE_TEXT = 'La edad mínima para ser candidato es de 25 años.';
+    END IF;
+END //
+
+DELIMITER ;
+INSERT INTO Candidatos (nombre_completo, edad, partido_politico, costo_campana)
+VALUES ('Carlos Ruiz', 27, 'Partido C', 18000.00);
+
+-- Intentar insertar un candidato con edad menor a 25 años (debería fallar)
+INSERT INTO Candidatos (nombre_completo, edad, partido_politico, costo_campana)
+VALUES ('Laura Sánchez', 22, 'Partido D', 12000.00);
+
+-- Verificar los candidatos registrados
+SELECT * FROM Candidatos;
